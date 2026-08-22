@@ -10,6 +10,7 @@ import { SendMoneyScreen } from "@/components/screens/SendMoneyScreen";
 import { SendResultScreen } from "@/components/screens/SendResultScreen";
 import { HistoryScreen } from "@/components/screens/HistoryScreen";
 import { EmergencyScreen } from "@/components/screens/EmergencyScreen";
+import { DebugHud } from "@/components/DebugHud";
 import { simulateTransfer } from "@/lib/mockBank";
 import { speech } from "@/lib/speech";
 
@@ -19,6 +20,7 @@ export default function Page() {
   const tracker = useNayanTracker();
   const [screen, setScreen] = useState<Screen>("home");
   const [sosSignal, setSosSignal] = useState(0);
+  const [showDebug, setShowDebug] = useState(true);
   const [sendResult, setSendResult] = useState<{ reference: string; beneficiary: string; amount: number } | null>(
     null
   );
@@ -130,12 +132,28 @@ export default function Page() {
           {screen === "history" && <HistoryScreen {...screenProps} />}
           {screen === "emergency" && <EmergencyScreen {...screenProps} triggerSignal={sosSignal} />}
 
-          <button
-            onClick={tracker.recalibrate}
-            className="fixed left-4 top-4 z-40 rounded-full border border-inkLine bg-inkRaised/80 px-4 py-2 font-ui text-sm text-paper/60"
-          >
-            Recalibrate
-          </button>
+          <div className="fixed left-4 top-4 z-40 flex gap-2">
+            <button
+              onClick={tracker.recalibrate}
+              className="rounded-full border border-inkLine bg-inkRaised/80 px-4 py-2 font-ui text-sm text-paper/60"
+            >
+              Recalibrate
+            </button>
+            <button
+              onClick={() => setShowDebug((v) => !v)}
+              className="rounded-full border border-inkLine bg-inkRaised/80 px-4 py-2 font-ui text-sm text-paper/60"
+            >
+              {showDebug ? "Hide" : "Show"} debug
+            </button>
+          </div>
+
+          {showDebug && (
+            <DebugHud
+              blinkLeft={tracker.debugInfo.blinkLeft}
+              blinkRight={tracker.debugInfo.blinkRight}
+              dwellTileId={tracker.debugInfo.dwellTileId}
+            />
+          )}
         </>
       )}
     </main>
