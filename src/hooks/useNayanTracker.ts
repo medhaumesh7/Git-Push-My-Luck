@@ -16,8 +16,13 @@ export type TrackerStatus =
 // Deliberate confirm-blink must be held this long. Reflexive human blinks are
 // typically 100-150ms; requiring a longer sustained closure is how we tell a
 // real "click" apart from ordinary blinking, without needing a second input device.
-const BLINK_CONFIRM_MS = 450;
-const BLINK_SCORE_THRESHOLD = 0.6;
+const BLINK_CONFIRM_MS = 400;
+const BLINK_SCORE_THRESHOLD = 0.55;
+// Below this, we don't trust iris position at all (eyelid starting to cover
+// the iris makes the gaze estimate noisy right when you're trying to blink-click).
+// We freeze gaze/dwell updates once either eye crosses this, instead of letting
+// a jumpy reading reset your dwell target mid-blink.
+const BLINK_FREEZE_THRESHOLD = 0.3;
 const DWELL_MS = 1100;
 const SMOOTHING = 0.25; // EMA factor for the gaze point, higher = snappier
 
@@ -44,6 +49,11 @@ export function useNayanTracker() {
   const [dwellProgress, setDwellProgress] = useState(0);
   const [confirmedTileId, setConfirmedTileId] = useState<string | null>(null);
   const [confirmNonce, setConfirmNonce] = useState(0);
+  const [debugInfo, setDebugInfo] = useState<{ blinkLeft: number; blinkRight: number; dwellTileId: string | null }>({
+    blinkLeft: 0,
+    blinkRight: 0,
+    dwellTileId: null,
+  });
 
   const registerTile = useCallback((id: string, rect: () => DOMRect | null) => {
     tilesRef.current.set(id, { id, rect });
@@ -110,8 +120,13 @@ export function useNayanTracker() {
   }, []);
 
   const processFrame = useCallback((frame: GazeFrame) => {
+    const closing = frame.blinkLeft > BLINK_FREEZE_THRESHOLD || frame.blinkRight > BLINK_FREEZE_THRESHOLD;
     const calibrator = calibratorRef.current;
-    if (calibrator.calibrated) {
+
+    // Freeze the gaze point / dwell target while eyes are closing or closed,
+    // so the noisy iris reading during a blink doesn't knock you off the tile
+    // right when you're trying to confirm it.
+    if (calibrator.calibrated && !closing) {
       const pred = calibrator.predict(frame);
       if (pred) {
         const prev = smoothedPointRef.current;
@@ -123,6 +138,12 @@ export function useNayanTracker() {
         evaluateDwell(next);
       }
     }
+
+    setDebugInfo({
+      blinkLeft: frame.blinkLeft,
+      blinkRight: frame.blinkRight,
+      dwellTileId: dwellStartRef.current?.id ?? null,
+    });
 
     evaluateBlink(frame);
   }, []);
@@ -231,6 +252,7 @@ export function useNayanTracker() {
     dwellProgress,
     confirmedTileId,
     confirmNonce,
+    debugInfo,
     start,
     runCalibration,
     recalibrate,
